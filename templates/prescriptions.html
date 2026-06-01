@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Prescriptions · Dermacare Clinic{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h1>Prescriptions</h1>
+      <p class="subtitle">
+        {% if session.role == 'Doctor' %}Prescriptions you've issued.
+        {% elif session.role == 'Patient' %}Medications prescribed to you.
+        {% else %}All prescriptions across the clinic.{% endif %}
+      </p>
+    </div>
+    {% if session.role == 'Doctor' %}
+    <a href="{{ url_for('add_prescription') }}" class="btn btn-primary">+ New prescription</a>
+    {% endif %}
+  </div>
+
+  {% if prescriptions %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Date</th>
+          {% if session.role != 'Patient' %}<th>Patient</th>{% endif %}
+          {% if session.role != 'Doctor' %}<th>Doctor</th>{% endif %}
+          <th>Diagnosis</th>
+          <th>Medicines</th>
+          <th>Total</th>
+          <th>Payment</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pr in prescriptions %}
+        <tr>
+          <td class="text-muted">#{{ pr.prescriptionID }}</td>
+          <td>{{ pr.createdAt }}</td>
+          {% if session.role != 'Patient' %}<td>{{ pr.patientName }}</td>{% endif %}
+          {% if session.role != 'Doctor' %}<td>{{ pr.doctorName }}</td>{% endif %}
+          <td class="text-muted">{{ pr.diagnosis or '—' }}</td>
+          <td>{{ pr.medCount }} item(s)</td>
+          <td><strong>${{ '%.2f'|format(pr.total or 0) }}</strong></td>
+          <td>
+            {% if pr.paymentStatus == 'Paid' %}
+              <span class="badge badge-paid">Paid</span>
+            {% else %}
+              <span class="badge badge-pending">Unpaid</span>
+            {% endif %}
+          </td>
+          <td style="white-space:nowrap;">
+            {% if session.role == 'Patient' %}
+              {# Patient: View (see it) + Pay if unpaid. No print. #}
+              <a href="{{ url_for('print_prescription', pid=pr.prescriptionID) }}" class="btn btn-outline btn-sm">View</a>
+              {% if pr.paymentStatus != 'Paid' %}
+                <a href="{{ url_for('patient_pay', pid=pr.prescriptionID) }}" class="btn btn-primary btn-sm">Pay</a>
+              {% endif %}
+
+            {% elif session.role == 'Pharmacist' %}
+              {# Pharmacist: View/Print + go to payment/dispense page #}
+              <a href="{{ url_for('print_prescription', pid=pr.prescriptionID) }}" class="btn btn-outline btn-sm">View / Print</a>
+              <a href="{{ url_for('pharmacy_detail', pid=pr.prescriptionID) }}" class="btn btn-primary btn-sm">Payment</a>
+
+            {% else %}
+              {# Doctor / Admin: View/Print #}
+              <a href="{{ url_for('print_prescription', pid=pr.prescriptionID) }}" class="btn btn-outline btn-sm">View / Print</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty card">
+    <h3>No prescriptions yet</h3>
+    {% if session.role == 'Doctor' %}
+    <a href="{{ url_for('add_prescription') }}" class="btn btn-primary mt-3">Write one</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

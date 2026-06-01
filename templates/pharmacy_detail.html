@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Payment · Prescription #{{ pres.prescriptionID }}{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h1>Prescription #{{ pres.prescriptionID }}</h1>
+      <p class="subtitle">{{ pres.patientName }} · seen by {{ pres.doctorName }}</p>
+    </div>
+    <a href="{{ url_for('pharmacy_queue') }}" class="btn btn-ghost">← Back to queue</a>
+  </div>
+
+  <div class="grid-2" style="align-items:start; gap:1.5rem;">
+
+    <!-- Left: itemized bill -->
+    <div class="pay-card">
+      {% if pres.diagnosis %}
+      <p class="text-muted mb-2"><strong>Diagnosis:</strong> {{ pres.diagnosis }}</p>
+      {% endif %}
+      <table class="pay-items">
+        <thead><tr><th>Medicine</th><th>Qty</th><th>Price</th><th class="r">Line</th></tr></thead>
+        <tbody>
+          {% for it in items %}
+          <tr>
+            <td>{{ it.medicineName }}<br><span class="text-muted" style="font-size:.78rem;">{{ it.instructions }}</span></td>
+            <td>{{ it.quantity }}</td>
+            <td>${{ '%.2f'|format(it.price) }}</td>
+            <td class="r">${{ '%.2f'|format(it.lineTotal) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr><td colspan="3"><strong>Total</strong></td><td class="r"><strong>${{ '%.2f'|format(total) }}</strong></td></tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <!-- Right: payment + dispense -->
+    <div class="pay-card text-center">
+      {% if pres.paymentStatus == 'Paid' %}
+        <div class="pay-check">✓</div>
+        <h3>Payment confirmed</h3>
+        <p class="text-muted">{{ pres.paymentMethod }} · {{ pres.paidAt.strftime('%b %d, %Y %I:%M %p') if pres.paidAt else '' }}</p>
+
+        <hr style="margin:1.25rem 0; border:none; border-top:1px solid var(--line);">
+
+        {% if pres.dispensed %}
+          <span class="badge badge-completed">Dispensed</span>
+          <p class="text-muted mt-2">{{ pres.dispensedAt.strftime('%b %d, %Y %I:%M %p') if pres.dispensedAt else '' }}</p>
+        {% else %}
+          <p class="text-muted mb-2">Hand medicine to the patient, then dispense to update stock.</p>
+          <a href="{{ url_for('pharmacy_dispense', pid=pres.prescriptionID) }}" class="btn btn-primary btn-block btn-lg">Dispense medication</a>
+        {% endif %}
+
+      {% else %}
+        <span class="pay-label">Amount to collect</span>
+        <div class="pay-amount">${{ '%.2f'|format(total) }}</div>
+
+        <div class="pay-qr-box mt-3">
+          <img src="{{ url_for('static', filename='image/aba.jpg') }}" alt="Payment QR" class="pay-qr-img">
+          <p class="text-muted">{{ payee_name }}</p>
+        </div>
+
+        <p class="pay-note">Confirm only after the patient has paid.</p>
+        <div class="d-flex gap-2 mt-2" style="justify-content:center;">
+          <a href="{{ url_for('pharmacy_pay', pid=pres.prescriptionID, method='QR') }}" class="btn btn-primary">Confirm QR payment</a>
+          <a href="{{ url_for('pharmacy_pay', pid=pres.prescriptionID, method='Cash') }}" class="btn btn-outline">Confirm cash</a>
+        </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+<style>
+  .pay-card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:1.75rem; box-shadow:var(--shadow-md); }
+  .pay-label { font-size:.7rem; text-transform:uppercase; letter-spacing:.1em; color:#8a8378; }
+  .pay-amount { font-family:'Fraunces',serif; font-size:2.4rem; color:var(--accent); line-height:1.1; }
+  .pay-items { width:100%; border-collapse:collapse; }
+  .pay-items th { text-align:left; font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; color:#8a8378; padding:.5rem 0; border-bottom:1px solid var(--line); }
+  .pay-items .r { text-align:right; }
+  .pay-items td { padding:.6rem 0; border-bottom:1px solid #f0ece4; }
+  .pay-items tfoot td { border-bottom:none; padding-top:.9rem; font-size:1.05rem; }
+  .pay-qr-box { text-align:center; background:#f7f5f0; border-radius:12px; padding:1.25rem; }
+  .pay-qr-img { width:200px; height:200px; border-radius:12px; background:#fff; padding:8px; }
+  .pay-note { font-size:.8rem; color:#8a8378; margin-top:1rem; }
+  .pay-check { width:56px; height:56px; border-radius:50%; background:var(--accent); color:#fff; font-size:1.8rem; display:grid; place-items:center; margin:0 auto 1rem; }
+</style>
+{% endblock %}
