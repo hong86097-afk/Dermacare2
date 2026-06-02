@@ -19,16 +19,15 @@ app.secret_key = os.environ.get('SECRET_KEY', 'change-this-in-production-please'
 # -----------------------------------------------------
 # Database configuration
 # -----------------------------------------------------
+import os
+
 DB_CONFIG = {
-    'host': '127.0.0.1',
-    'user': 'root',
-    'password': 'Hong9090$',      
-    'database': 'clinic',
-    'port': 3306,
-    'use_pure': True,              # IMPORTANT: use the pure-Python connector.
-                                   # The C extension (connection_cext) throws
-                                   # "Python type ... cannot be converted" on
-                                   # newer Python versions. This avoids it.
+    'host':     os.environ.get('DB_HOST', '127.0.0.1'),
+    'user':     os.environ.get('DB_USER', 'root'),
+    'password': os.environ.get('DB_PASSWORD', 'Hong9090$'),
+    'database': os.environ.get('DB_NAME', 'clinic'),
+    'port':     int(os.environ.get('DB_PORT', 3306)),
+    'use_pure': True,
 }
 
 
@@ -341,15 +340,19 @@ def dashboard():
             "SELECT COUNT(*) AS c FROM Medicines WHERE stock < 20", one=True)['c']
 
         recent = query_db(
-            """SELECT pr.prescriptionID, pr.quantity, pr.createdAt,
-                      m.medicineName, p.patientName
-               FROM Prescriptions pr
-               JOIN Medicines m ON pr.medicineID=m.medicineID
-               JOIN Appointments a ON pr.appointmentID=a.appointmentID
-               JOIN Patients p ON a.patientID=p.patientID
-               ORDER BY pr.createdAt DESC LIMIT 5""")
+            """SELECT pr.prescriptionID, pr.diagnosis, pr.createdAt, pr.paymentStatus,
+                    p.patientName, d.doctorName,
+                    COUNT(pi.itemID) AS medCount,
+                    COALESCE(SUM(pi.quantity * m.price), 0) AS total
+            FROM Prescriptions pr
+            JOIN Appointments a ON pr.appointmentID=a.appointmentID
+            JOIN Patients p ON a.patientID=p.patientID
+            JOIN Doctors d ON a.doctorID=d.doctorID
+            LEFT JOIN PrescriptionItems pi ON pi.prescriptionID=pr.prescriptionID
+            LEFT JOIN Medicines m ON pi.medicineID=m.medicineID
+            GROUP BY pr.prescriptionID
+            ORDER BY pr.createdAt DESC LIMIT 5""")
         return render_template('dashboard_pharmacist.html', stats=stats, recent=recent)
-
     else:  # Admin
         stats['doctors'] = query_db("SELECT COUNT(*) AS c FROM Doctors", one=True)['c']
         stats['patients'] = query_db("SELECT COUNT(*) AS c FROM Patients", one=True)['c']
@@ -730,7 +733,25 @@ def patient_pay(pid):
     payee_name = "Dermacare Clinic"
     return render_template('patient_pay.html', pres=pres, items=items, total=total,
                            payee_account=payee_account, payee_name=payee_name)
-
+def get_prescription_detail(prescription_id):
+    pres = query_db(
+        """SELECT pr.*, a.appointmentDate, p.patientName, d.doctorName,
+                  d.consultationFee
+           FROM Prescriptions pr
+           JOIN Appointments a ON pr.appointmentID=a.appointmentID
+           JOIN Patients p ON a.patientID=p.patientID
+           JOIN Doctors d ON a.doctorID=d.doctorID
+           WHERE pr.prescriptionID=%s""",
+        (prescription_id,), fetch=True, one=True)
+    items = query_db(
+        """SELECT pi.quantity, pi.instructions, m.medicineName, m.price,
+                  (pi.quantity * m.price) AS lineTotal
+           FROM PrescriptionItems pi
+           JOIN Medicines m ON pi.medicineID=m.medicineID
+           WHERE pi.prescriptionID=%s""",
+        (prescription_id,))
+    total = sum(float(it['lineTotal']) for it in items) if items else 0.0
+    return pres, items, total
 # ---------------- PRINTABLE PRESCRIPTION ----------------
 @app.route('/prescriptions/<int:pid>/print')
 @login_required
@@ -957,4 +978,5 @@ def not_found(e):
 # Run
 # -----------------------------------------------------
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
