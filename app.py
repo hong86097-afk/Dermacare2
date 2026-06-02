@@ -28,6 +28,7 @@ DB_CONFIG = {
     'database': os.environ.get('DB_NAME', 'clinic'),
     'port':     int(os.environ.get('DB_PORT', 3306)),
     'use_pure': True,
+    'autocommit': True,
 }
 
 
